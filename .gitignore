@@ -19,3 +19,15 @@ uv.lock
 notebooks/
 data
 .DS_Store
+.ruff_cache
+# Pytest cache
+.pytest_cache/
+# Coverage reports
+.coverage
+.coverage.*
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+# PyCharm project files
+.idea/
+# VS Code workspace settings
+.vscode/
