@@ -17,6 +17,10 @@ jobs:
           python-version: '3.13'
       - name: Install uv
         run: pip install uv
+      - name: Setup Virtual Environment
+        run: uv venv .venv
+      - name: Activate Virtual Environment
+        run: source .venv/bin/activate
       - name: Install dependencies
         run: uv pip install -e .
       - name: Build package
