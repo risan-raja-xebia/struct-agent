@@ -75,7 +75,13 @@ We welcome contributions! To get started:
    ```bash
    ruff check .
    ```
-5. Submit a pull request with a clear description of your changes.
+5. Set up pre-commit hooks (recommended):
+   ```bash
+   uv pip install pre-commit ruff
+   pre-commit install
+   ```
+   This will automatically run code quality checks before each commit.
+6. Submit a pull request with a clear description of your changes.
 
 ### Guidelines
 - Write clear, concise commit messages
