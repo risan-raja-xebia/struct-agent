@@ -18,3 +18,4 @@ uv.lock
 .env
 notebooks/
 data
+.DS_Store
