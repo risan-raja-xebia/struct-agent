@@ -1,0 +1,28 @@
+[project]
+name = "struct-agent"
+version = "0.1.0"
+description = "Structured Query Agent By Xebia"
+readme = "README.md"
+authors = [
+    { name = "Risan Raja", email = "risan.raja@xebia.com" },
+    { name = "Muni Angothu", email = "muni.angothu@xebia.com"}
+]
+requires-python = ">=3.13"
+dependencies = [
+    "llama-index>=0.12.42",
+    "llama-index-llms-openai>=0.4.5",
+    "psycopg2-binary>=2.9.10",
+    "python-dotenv>=1.1.0",
+    "sqlalchemy>=2.0.41",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "jupyter>=1.1.1",
+    "langfuse>=3.0.1",
+    "ruff>=0.11.13",
+]

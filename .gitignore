@@ -1,0 +1,20 @@
+# Python-generated files
+__pycache__/
+workspace/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+uv.lock
+*.ipynb
+# Virtual environments
+.venv
+uv.lock
+*.ipynb
+.env
+notebooks/
+data
