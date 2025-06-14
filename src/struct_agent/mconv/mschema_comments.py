@@ -42,7 +42,7 @@ from llama_index.llms.openai import OpenAI
 from typing import Optional
 
 
-class DatabaseSchemaGenerator:
+class MSchemaGenerator:
     """
     A class that handles database connection and schema generation
     using SchemaEngine with LLM-powered analysis.
@@ -50,7 +50,7 @@ class DatabaseSchemaGenerator:
     
     def __init__(self, env_file: str = '.env', comment_mode: str = 'generation', language: str = "EN"):
         """
-        Initializes the DatabaseSchemaGenerator.
+        Initializes the MSchemaGenerator.
         
         Args:
             env_file (str): Path to environment file. Defaults to '.env'.
@@ -154,7 +154,7 @@ class DatabaseSchemaGenerator:
             
             # Convert to string format
             mschema_str = self.mschema.to_mschema()
-            print(mschema_str)
+            # print(mschema_str)
             
             return mschema_str
             

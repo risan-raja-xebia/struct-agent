@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-from struct_agent.mconv.mschema_comments import DatabaseSchemaGenerator
+from struct_agent.mconv.mschema_comments import MSchemaGenerator
 from struct_agent.mconv.mschema_to_mdl import MSchemaToMDLConverter
 
 
@@ -37,7 +37,7 @@ def main():
         return False
     # Step 1: Generate schema with comments
     print("📊 Step 1: Generating database schema with comments...")
-    generator = DatabaseSchemaGenerator(
+    generator = MSchemaGenerator(
         env_file='.env',
         comment_mode='generation', 
         language="EN"
@@ -94,7 +94,7 @@ def main():
     except FileNotFoundError as e:
         print(f"❌ File not found: {e}")
         print(f"   Expected file: {input_file}")
-        print("   Make sure DatabaseSchemaGenerator output file exists")
+        print("   Make sure MSchemaGenerator output file exists")
         return False
     except ValueError as e:
         print(f"❌ Invalid JSON format: {e}")
