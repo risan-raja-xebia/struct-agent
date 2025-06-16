@@ -1,43 +1,4 @@
-# from dotenv import load_dotenv, find_dotenv
-# import os
-# from sqlalchemy import create_engine, text
-# from sqlalchemy.engine import Engine
 
-# class DatabaseConnector:
-#     def __init__(self):
-#         """
-#         Initializes the DatabaseConnector by loading environment variables
-#         and attempting to connect to the database.
-#         """
-#         load_dotenv(find_dotenv())
-
-#         try:
-#             self.engine = create_engine(
-#                 f"postgresql://{os.environ['POSTGRES_USER']}:{os.environ['POSTGRES_PASSWORD']}"
-#                 f"@{os.environ['POSTGRES_HOST']}:{os.environ['POSTGRES_PORT']}/{os.environ['POSTGRES_DB']}"
-#             )
-#         except KeyError as e:
-#             print(f"Missing environment variable: {e}")
-#             self.engine = None
-#             print("Engine not created. Skipping connection test.")
-#             return
-
-#         try:
-#             with self.engine.connect() as connection:
-#                 connection.execute(text("SELECT 1"))
-#                 print("Database connection successful!")
-#         except Exception as e:
-#             print(f"Failed to connect to the database: {str(e)}")
-
-#     def get_engine(self) -> Engine | None:
-#         return self.engine
-
-
-
-# import os
-# from sqlalchemy import create_engine, text
-# from sqlalchemy.engine import Engine
-# from llama_index.llms.openai import OpenAI
 from typing import Optional
 # TODO: Add Logging to the File
 
