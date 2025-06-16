@@ -33,7 +33,7 @@
 #         return self.engine
 
 
-from dotenv import load_dotenv
+
 import os
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
@@ -69,11 +69,11 @@ class MSchemaGenerator:
         self.db_name = None
 
         # Load environment variables
-        load_dotenv(self.env_file) # TODO: Remove reading from the envionment file, use explicit keyword arguments or specify the environment variables in the code
+        # load_dotenv(self.env_file)
 
         # Initialize components
-        self._setup_database_connection()
-        self._setup_llm()
+        # self._setup_database_connection()
+        # self._setup_llm()
 
     def _setup_database_connection(self) -> None:
         """
