@@ -121,31 +121,22 @@ class MSchemaGenerator:
             print(f"Failed to generate schema: {str(e)}")
             return None
 
-    def save_schema(self, filename: Optional[str] = None) -> bool:
+    def save_schema(self, filename: str):
         """
         Saves the generated schema to a JSON file.
 
         Args:
-            filename (Optional[str]): Custom filename. If None, uses database name.
+            filename (str): Custom filename. If None, uses database name.
 
         Returns:
             bool: True if saved successfully, False otherwise.
         """
         if not self.mschema:
-            print("No schema available to save. Run generate_schema() first.")
-            return False
+            raise ValueError("No schema available to save. Run generate_schema() first.")
+        if not filename:
+            raise ValueError("Filename cannot be None or empty.")
+        self.mschema.save(filename)
 
-        try:
-            if filename is None:
-                filename = f'./{self.db_name}_mschema.json'
-
-            self.mschema.save(filename)
-            print(f"Schema saved to {filename}")
-            return True
-
-        except Exception as e:
-            print(f"Failed to save schema: {str(e)}")
-            return False
 
     def get_engine(self):
         """
