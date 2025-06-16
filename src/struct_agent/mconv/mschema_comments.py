@@ -34,10 +34,10 @@
 
 
 
-import os
-from sqlalchemy import create_engine, text
-from sqlalchemy.engine import Engine
-from llama_index.llms.openai import OpenAI
+# import os
+# from sqlalchemy import create_engine, text
+# from sqlalchemy.engine import Engine
+# from llama_index.llms.openai import OpenAI
 from typing import Optional
 # TODO: Add Logging to the File
 
@@ -50,7 +50,7 @@ class MSchemaGenerator:
     using SchemaEngine with LLM-powered analysis.
     """
 
-    def __init__(self, env_file: str = '.env', comment_mode: str = 'generation', language: str = "EN"):
+    def __init__(self, llm,db_engine,comment_mode: str = 'generation', language: str = "EN",):
         """
         Initializes the MSchemaGenerator.
 
@@ -59,7 +59,6 @@ class MSchemaGenerator:
             comment_mode (str): Mode for comment generation. Defaults to 'generation'.
             language (str): Language for schema descriptions. Defaults to "EN".
         """
-        self.env_file = env_file
         self.comment_mode = comment_mode
         self.language = language
         self.db_engine = None
@@ -75,50 +74,7 @@ class MSchemaGenerator:
         # self._setup_database_connection()
         # self._setup_llm()
 
-    def _setup_database_connection(self) -> None:
-        """
-        Creates and tests the database connection using environment variables.
-        """
-        try:
-            # Get database name
-            self.db_name = os.environ['POSTGRES_DB']
 
-            # Create connection string
-            connection_string = (
-                f"postgresql://{os.environ['POSTGRES_USER']}:{os.environ['POSTGRES_PASSWORD']}"
-                f"@{os.environ['POSTGRES_HOST']}:{os.environ['POSTGRES_PORT']}/{self.db_name}"
-            )
-
-            # Create engine
-            # TODO: Get the engine during initialization rather than during the generation of the schema
-            self.db_engine = create_engine(connection_string)
-            print(self.db_engine)
-
-            # Test the connection
-            with self.db_engine.connect() as connection:
-                connection.execute(text("SELECT 1"))
-                print("Database connection successful!")
-
-        except KeyError as e:
-            print(f"Missing environment variable: {e}")
-            self.db_engine = None
-        except Exception as e:
-            print(f"Error connecting to database: {str(e)}")
-            self.db_engine = None
-
-    def _setup_llm(self) -> None:
-        """
-        Initializes the OpenAI LLM instance.
-        """
-        try:
-            self.llm = OpenAI(
-                model="gpt-4o-mini",
-                # Uses OPENAI_API_KEY environment variable by default
-            )
-            print("LLM initialized successfully!")
-        except Exception as e:
-            print(f"Failed to initialize LLM: {str(e)}")
-            self.llm = None
 
     def generate_schema(self) -> Optional[str]:
         """
@@ -191,7 +147,7 @@ class MSchemaGenerator:
             print(f"Failed to save schema: {str(e)}")
             return False
 
-    def get_engine(self) -> Optional[Engine]:
+    def get_engine(self):
         """
         Returns the database engine instance.
 
