@@ -38,11 +38,12 @@
 # from sqlalchemy import create_engine, text
 # from sqlalchemy.engine import Engine
 # from llama_index.llms.openai import OpenAI
+import logging
 from typing import Optional
 # TODO: Add Logging to the File
 
 from ..mschema.schema_engine import SchemaEngine
-
+logger = logging.getLogger(__name__)
 
 class MSchemaGenerator:
     """
@@ -58,6 +59,7 @@ class MSchemaGenerator:
             env_file (str): Path to environment file. Defaults to '.env'.
             comment_mode (str): Mode for comment generation. Defaults to 'generation'.
             language (str): Language for schema descriptions. Defaults to "EN".
+
         """
         self.comment_mode = comment_mode
         self.language = language
@@ -66,6 +68,9 @@ class MSchemaGenerator:
         self.schema_engine_instance = None
         self.mschema = None
         self.db_name = None
+
+        logger.info("Initializing MSchemaGenerator")
+        logger.debug(f"Parameters: comment_mode={comment_mode}, language={language}")
 
         # Load environment variables
         # load_dotenv(self.env_file)
@@ -83,17 +88,15 @@ class MSchemaGenerator:
         Returns:
             Optional[str]: The generated schema string, or None if generation fails.
         """
+
         if not self.db_engine:
-            print("Database engine not available. Cannot generate schema.")
-            return None
+            raise ValueError("Database engine not available. Cannot generate schema.")
 
         if not self.llm:
-            print("LLM not available. Cannot generate schema.")
-            return None
+            raise ValueError("LLM not available. Cannot generate schema.")
 
         if not self.db_name:
-            print("Database name not available. Cannot generate schema.")
-            return None
+            raise ValueError("Database name not available. Cannot generate schema.")
 
         try:
             # Create SchemaEngine instance
@@ -103,6 +106,7 @@ class MSchemaGenerator:
                 db_name=self.db_name,
                 comment_mode=self.comment_mode
             )
+            logger.debug("SchemaEngine instance created successfully")
 
             # Generate field categories and descriptions
             self.schema_engine_instance.fields_category()
@@ -114,7 +118,7 @@ class MSchemaGenerator:
             # Convert to string format
             mschema_str = self.mschema.to_mschema()
             # print(mschema_str)
-
+            logger.info("Schema generation completed successfully")
             return mschema_str
 
         except Exception as e:
@@ -158,14 +162,14 @@ class MSchemaGenerator:
             return self.mschema.to_mschema()
         return None
 
-    def is_connected(self) -> bool:
-        """
-        Checks if the database connection is available.
+    # def is_connected(self) -> bool:
+    #     """
+    #     Checks if the database connection is available.
 
-        Returns:
-            bool: True if connected, False otherwise.
-        """
-        return self.db_engine is not None
+    #     Returns:
+    #         bool: True if connected, False otherwise.
+    #     """
+    #     return self.db_engine is not None
 
     def run_complete_process(self) -> bool:
         """
@@ -175,13 +179,13 @@ class MSchemaGenerator:
             bool: True if successful, False otherwise.
         """
         if not self.is_connected():
-            print("Database not connected. Cannot run process.")
-            return False
+            raise ValueError("Database connection is not established. Please connect to the database first.")
+
 
         # Generate schema
         schema_string = self.generate_schema()
         if not schema_string:
-            return False
+            raise ValueError("Schema generation failed. Please check the database connection and LLM configuration.")
 
         # Save schema
         return self.save_schema()
