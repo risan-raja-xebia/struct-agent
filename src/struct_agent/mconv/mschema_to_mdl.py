@@ -26,25 +26,25 @@ class WrenMDLConverter:
         self.models = []
         self.relationships = []
 
-    @classmethod
-    def from_env_vars(cls, catalog_env_var: str = 'POSTGRES_DB', schema: str = "public"):
-        """
-        Create converter instance using environment variables.
+    # @classmethod
+    # def from_env_vars(cls, catalog_env_var: str = 'POSTGRES_DB', schema: str = "public"):
+    #     """
+    #     Create converter instance using environment variables.
 
-        Args:
-            catalog_env_var (str): Environment variable name for catalog. Defaults to 'POSTGRES_DB'
-            schema (str): The schema name. Defaults to "public"
+    #     Args:
+    #         catalog_env_var (str): Environment variable name for catalog. Defaults to 'POSTGRES_DB'
+    #         schema (str): The schema name. Defaults to "public"
 
-        Returns:
-            WrenMDLConverter: Configured converter instance
+    #     Returns:
+    #         WrenMDLConverter: Configured converter instance
 
-        Raises:
-            ValueError: If the specified environment variable is not found
-        """
-        catalog = os.getenv(catalog_env_var)
-        if not catalog:
-            raise ValueError(f"Environment variable '{catalog_env_var}' not found or empty")
-        return cls(catalog=catalog, schema=schema)
+    #     Raises:
+    #         ValueError: If the specified environment variable is not found
+    #     """
+    #     catalog = os.getenv(catalog_env_var)
+    #     if not catalog:
+    #         raise ValueError(f"Environment variable '{catalog_env_var}' not found or empty")
+    #     return cls(catalog=catalog, schema=schema)
 
     @classmethod
     def from_config(cls, config: Dict[str, str]):
