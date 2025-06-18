@@ -31,3 +31,5 @@ data
 .idea/
 # VS Code workspace settings
 .vscode/
+learning/
+*.json
