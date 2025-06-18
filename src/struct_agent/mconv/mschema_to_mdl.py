@@ -1,7 +1,4 @@
-
-
 import json
-import os
 from typing import Dict, List, Any
 
 
@@ -9,42 +6,22 @@ from typing import Dict, List, Any
 class WrenMDLConverter:
     """Converts mschema JSON format to Wren.ai MDL format"""
 
-    def __init__(self, catalog: str = None, schema: str = "public"):
+    def __init__(self, catalog: str = None, schema: str = "public", use_table_reference: bool = True):
         """
         Initialize the converter.
 
         Args:
             catalog (str): The catalog name. If None, will try to get from environment variable POSTGRES_DB
             schema (str): The schema name. Defaults to "public"
+            use_table_reference (bool): If True, uses tableReference; if False, uses refSql. Defaults to True
         """
-        # If catalog not provided, try to get from environment
-        if catalog is None:
-            catalog = os.getenv('POSTGRES_DB', 'my_catalog')
 
         self.catalog = catalog
         self.schema = schema
+        self.use_table_reference = use_table_reference
         self.models = []
         self.relationships = []
 
-    # @classmethod
-    # def from_env_vars(cls, catalog_env_var: str = 'POSTGRES_DB', schema: str = "public"):
-    #     """
-    #     Create converter instance using environment variables.
-
-    #     Args:
-    #         catalog_env_var (str): Environment variable name for catalog. Defaults to 'POSTGRES_DB'
-    #         schema (str): The schema name. Defaults to "public"
-
-    #     Returns:
-    #         WrenMDLConverter: Configured converter instance
-
-    #     Raises:
-    #         ValueError: If the specified environment variable is not found
-    #     """
-    #     catalog = os.getenv(catalog_env_var)
-    #     if not catalog:
-    #         raise ValueError(f"Environment variable '{catalog_env_var}' not found or empty")
-    #     return cls(catalog=catalog, schema=schema)
 
     @classmethod
     def from_config(cls, config: Dict[str, str]):
@@ -52,7 +29,7 @@ class WrenMDLConverter:
         Create converter instance from configuration dictionary.
 
         Args:
-            config (Dict[str, str]): Configuration dictionary with 'catalog' and optionally 'schema'
+            config (Dict[str, str]): Configuration dictionary with 'catalog', optionally 'schema' and 'use_table_reference'
 
         Returns:
             WrenMDLConverter: Configured converter instance
@@ -65,25 +42,10 @@ class WrenMDLConverter:
             raise ValueError("'catalog' key is required in config dictionary")
 
         schema = config.get('schema', 'public')
-        return cls(catalog=catalog, schema=schema)
+        use_table_reference = config.get('use_table_reference', 'true').lower() == 'true'
+        return cls(catalog=catalog, schema=schema, use_table_reference=use_table_reference)
 
-    def set_catalog(self, catalog: str) -> None:
-        """
-        Set the catalog name after initialization.
 
-        Args:
-            catalog (str): The catalog name
-        """
-        self.catalog = catalog
-
-    def set_schema(self, schema: str) -> None:
-        """
-        Set the schema name after initialization.
-
-        Args:
-            schema (str): The schema name
-        """
-        self.schema = schema
 
     def convert(self, mschema_data: Dict[str, Any]) -> Dict[str, Any]:
         """Main conversion method following Wren.ai MDL structure"""
@@ -157,13 +119,24 @@ class WrenMDLConverter:
 
     def _convert_table_to_model(self, table_name: str, table_data: Dict[str, Any], db_id: str) -> Dict[str, Any]:
         """Convert table to Wren.ai MDL model format"""
-        # Following Wren.ai model structure exactly
+        # Following Wren.ai model structure
         model = {
             "name": self._pascal_case(table_name),
-            "properties": {},  # properties comes before refSql in Wren.ai examples
-            "refSql": f"select * from {self.catalog}.{table_name}",  # Use catalog instead of db_id
+            "properties": {},
             "columns": []
         }
+
+        # Add table reference or refSql based on configuration
+        if self.use_table_reference:
+            model["tableReference"] = {
+                "catalog": self.catalog,
+                "schema": self.schema,
+                "table": table_name
+            }
+        else:
+            # Use refSql format - handle special characters in table names if needed
+            table_ref = f'"{self.catalog}".{self.schema}."{table_name}"'
+            model["refSql"] = f"select * from {table_ref}"
 
         # Add description to properties if available
         if table_data.get("comment"):
@@ -177,15 +150,15 @@ class WrenMDLConverter:
             # Basic column structure as per Wren.ai
             column = {
                 "name": self._camel_case(field_name),
+                "type": self._map_to_wren_type(field_data.get("type", "VARCHAR")),
+                "notNull": not field_data.get("nullable", True),  # Map nullable to notNull (inverse)
                 "expression": field_name,
-                "type": self._map_to_wren_type(field_data.get("type", "VARCHAR"))
+                "properties": {}
             }
 
             # Add column description if available
             if field_data.get("comment"):
-                column["properties"] = {
-                    "description": field_data["comment"]
-                }
+                column["properties"]["description"] = field_data["comment"]
 
             model["columns"].append(column)
 
@@ -212,6 +185,11 @@ class WrenMDLConverter:
                 rel_name = f"{self._pascal_case(from_table)}{self._pascal_case(to_table)}"
 
                 # Wren.ai relationship structure
+                '''TODO: Here to dynamically obtain the joinType information.
+                Here Currently we have hardcoded MANY_TO_ONE,DUE To we are taking mschema.json converting Mdl.json
+                IN MSCHEMA we don't have relationship type, so we are assuming it is MANY_TO_ONE,only foreign keys's available
+                Challenge Here how to map  not available relationship type in mschema.json to mdl.json
+                '''
                 relationship = {
                     "name": rel_name,
                     "models": [
@@ -309,25 +287,22 @@ class WrenMDLConverter:
 
 # Usage Examples:
 
-# Example 1: Direct instantiation with catalog name
+# Example 1: Direct instantiation with tableReference (default)
 # converter = WrenMDLConverter(catalog="my_database", schema="public")
 
-# Example 2: Using environment variables (if POSTGRES_DB is set)
-# converter = WrenMDLConverter.from_env_vars()
+# Example 2: Direct instantiation with refSql
+# converter = WrenMDLConverter(catalog="my_database", schema="public", use_table_reference=False)
 
-# Example 3: Using custom environment variable
-# converter = WrenMDLConverter.from_env_vars(catalog_env_var="MY_DB_NAME")
-
-# Example 4: Using configuration dictionary
-# config = {"catalog": "production_db", "schema": "public"}
+# Example 3: Using configuration dictionary with tableReference
+# config = {"catalog": "production_db", "schema": "public", "use_table_reference": "true"}
 # converter = WrenMDLConverter.from_config(config)
 
-# Example 5: Setting catalog after initialization
-# converter = WrenMDLConverter()
-# converter.set_catalog("my_database")
+# Example 4: Using configuration dictionary with refSql
+# config = {"catalog": "production_db", "schema": "public", "use_table_reference": "false"}
+# converter = WrenMDLConverter.from_config(config)
 
-# Example 6: Complete usage without environment dependency
-# converter = WrenMDLConverter(catalog="ecommerce_db", schema="public")
+# Example 5: Complete usage
+# converter = WrenMDLConverter(catalog="ecommerce_db", schema="public", use_table_reference=True)
 # mdl_data = converter.convert_and_save("schema.json", "output.mdl.json")
 # stats = converter.get_conversion_stats(mdl_data)
 # print(f"Converted {stats['models']} models and {stats['relationships']} relationships")
