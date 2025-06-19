@@ -9,11 +9,15 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
+    "datasketch>=1.6.5",
+    "func-timeout>=4.3.5",
     "llama-index>=0.12.42",
     "llama-index-llms-openai>=0.4.5",
     "psycopg2-binary>=2.9.10",
     "python-dotenv>=1.1.0",
     "sqlalchemy>=2.0.41",
+    "sqlglot>=26.29.0",
+    "tqdm>=4.67.1",
 ]
 
 [build-system]
