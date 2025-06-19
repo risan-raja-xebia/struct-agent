@@ -1,6 +1,6 @@
 import pytest
 import json
-from src.struct_agent.mdl import mdl_loader
+from struct_agent.mdl import mdl_loader
 from sqlalchemy import create_engine
 
 # Sample MDL data for testing

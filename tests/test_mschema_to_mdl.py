@@ -1,6 +1,6 @@
 import pytest
 import json
-from src.struct_agent.mconv.mschema_to_mdl import WrenMDLConverter
+from struct_agent.mconv.mschema_to_mdl import WrenMDLConverter
 
 def sample_mschema():
     return {

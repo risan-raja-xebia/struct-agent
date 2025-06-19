@@ -1,4 +1,4 @@
-from src.struct_agent.mdl import schema
+from struct_agent.mdl import schema
 
 
 def test_check_connection_success():

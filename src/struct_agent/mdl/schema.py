@@ -109,10 +109,7 @@ class SqlPair(Base):
     created_at: Mapped[DateTime] = mapped_column(DateTime, nullable=False, default=datetime.now(UTC_TZ))
     updated_at: Mapped[DateTime] = mapped_column(DateTime, nullable=False, default=datetime.now(UTC_TZ), onupdate=datetime.now(UTC_TZ))
 
-# class SqliteSeq(Base):
-#     __tablename__ = "sqlite_sequence"
-#     name: Mapped[str] = mapped_column(String(255), primary_key=True)
-#     seq: Mapped[int] = mapped_column(Integer, nullable=False)
+
 
 class Thread(Base):
     __tablename__ = "thread"
