@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 
 # Import from the models file
 from .schema import (
- get_engine, Project, Model, ModelColumn,
+    Project, Model, ModelColumn,
     Relation, TableReference
 )
 
@@ -20,10 +20,10 @@ def load_mdl_file(file_path: str) -> Dict[str, Any]:
     except json.JSONDecodeError as e:
         raise ValueError(f"Invalid JSON in MDL file: {e}")
 
-def update_mdl_to_db(mdl_file: str, project_display_name: str = "MDL Project"):
-    """Update the PostgreSQL database with the MDL data."""
-    # Create a database session
-    engine = get_engine()
+def update_mdl_to_db(mdl_file: str, project_display_name: str = "MDL Project", engine=None):
+    """Update the database with the MDL data."""
+    if engine is None:
+        raise ValueError("An SQLAlchemy engine must be provided.")
     Session = sessionmaker(bind=engine)
     session = Session()
 

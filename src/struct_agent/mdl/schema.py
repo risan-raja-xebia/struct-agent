@@ -1,29 +1,23 @@
-from dotenv import load_dotenv
-import os
-from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base
-from datetime import UTC as UTC_TZ
-from sqlalchemy import Integer, String, ForeignKey, DateTime, Boolean, JSON, text
-from sqlalchemy.orm import relationship, Mapped, mapped_column
+from sqlalchemy.orm import declarative_base, relationship, Mapped, mapped_column
+from sqlalchemy import Integer, String, ForeignKey, DateTime, Boolean, JSON
 from typing import Optional, Any
-from datetime import datetime
+from datetime import datetime, UTC as UTC_TZ
 
-load_dotenv('.env')
-
+# Define the declarative base
 Base = declarative_base()
 
-def get_engine():
-    return create_engine(f"postgresql://{os.environ['POSTGRES_USER']}:{os.environ['POSTGRES_PASSWORD']}@{os.environ['POSTGRES_HOST']}:{os.environ['POSTGRES_PORT']}/{os.environ['POSTGRES_DB']}")
+# Internal flag to prevent repeated metadata creation
+_tables_registered = False
 
-def check_connection():
-    engine = get_engine()
-    try:
-        with engine.connect() as connection:
-            result = connection.execute(text("SELECT 1"))
-            print(result.fetchone())
-            print("Connection successful!")
-    except Exception as e:
-        print(f"Connection failed: {e}")
+def register_models(engine):
+    """
+    Register all models to the provided SQLAlchemy engine.
+    This should be called once during application startup with the desired engine.
+    """
+    global _tables_registered
+    if not _tables_registered:
+        Base.metadata.create_all(engine, checkfirst=True)
+        _tables_registered = True
 
 class Model(Base):
     __tablename__ = "model"
@@ -115,10 +109,10 @@ class SqlPair(Base):
     created_at: Mapped[DateTime] = mapped_column(DateTime, nullable=False, default=datetime.now(UTC_TZ))
     updated_at: Mapped[DateTime] = mapped_column(DateTime, nullable=False, default=datetime.now(UTC_TZ), onupdate=datetime.now(UTC_TZ))
 
-class SqliteSeq(Base):
-    __tablename__ = "sqlite_sequence"
-    name: Mapped[str] = mapped_column(String(255), primary_key=True)
-    seq: Mapped[int] = mapped_column(Integer, nullable=False)
+# class SqliteSeq(Base):
+#     __tablename__ = "sqlite_sequence"
+#     name: Mapped[str] = mapped_column(String(255), primary_key=True)
+#     seq: Mapped[int] = mapped_column(Integer, nullable=False)
 
 class Thread(Base):
     __tablename__ = "thread"
@@ -304,5 +298,6 @@ class TableReference(Base):
     model = relationship("Model", back_populates="table_reference")
 
 # Usage Example:
-#     check_connection()
-#     Base.metadata.create_all(get_engine(), checkfirst=True)
+#     from sqlalchemy import create_engine
+#     engine = create_engine(...)
+#     register_models(engine)
