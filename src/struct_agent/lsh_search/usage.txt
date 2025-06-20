@@ -1,0 +1,79 @@
+import os
+from sqlalchemy import create_engine, text
+from struct_agent.lsh_search.preprocess import make_db_lsh
+from struct_agent.lsh_search.search import load_db_lsh, query_lsh
+
+SCHEMA_NAME = "ecommerce"  ,Here when empty or no scheme will be provided,then default it takes all schemas of a database
+
+# Build the engine using individual environment variables
+db_engine = create_engine(
+    f"postgresql://{os.environ['POSTGRES_USER']}:{os.environ['POSTGRES_PASSWORD']}@"
+    f"{os.environ['POSTGRES_HOST']}:{os.environ['POSTGRES_PORT']}/{os.environ['POSTGRES_DB']}"
+)
+
+print(db_engine)
+
+try:
+    # Test the connection by executing a simple query
+    with db_engine.connect() as connection:
+        result = connection.execute(text("SELECT 1"))
+        print("Database connection successful!")
+except Exception as e:
+    print(f"Error connecting to database: {str(e)}")
+
+# Get the list of schemas in the database
+with db_engine.connect() as connection:
+    result = connection.execute(text("SELECT schema_name FROM information_schema.schemata"))
+    schemas = [row[0] for row in result]
+    print("Schemas in ecommerce_db:", schemas)
+
+# Generate LSH and minhashes if not already present, using only the 'ecommerce' schema
+make_db_lsh(
+    db_engine,
+    "./postgres_data",  # output directory
+    "postgres_data",    # db_name (used as prefix for .pkl files)
+    signature_size=100,
+    n_gram=3,
+    threshold=0.8,
+    schema=SCHEMA_NAME
+)
+
+# Now you can safely load the LSH and minhashes
+lsh, minhashes = load_db_lsh("./postgres_data")
+
+# 2. Search for similar terms
+
+# Find similar values to your search term
+search_term = "osasco"
+similar_values = query_lsh(
+    lsh=lsh,
+    minhashes=minhashes,
+    keyword=search_term,
+    top_n=10
+)
+
+# 3. Print results
+print(f"Similar values to '{search_term}':")
+for table_name, columns in similar_values.items():
+    for column_name, values in columns.items():
+        print(f"\n{table_name}.{column_name}:")
+        for value in values:
+            print(f"  - {value}")
+
+
+Results:
+laxma@XE-GGN-IT-03442 ~/P/s/src (dev-muni)> python main.py
+Engine(postgresql://admin:***@172.19.215.172:5432/ecommerce_db)
+Database connection successful!
+Schemas in ecommerce_db: ['public', 'ecommerce', 'marketing', 'information_schema', 'pg_catalog', 'pg_toast']
+Creating LSH: 100%|███████████████████████████████████| 32686/32686 [00:41<00:00, 788.39it/s]
+Similar values to 'osasco':
+
+geolocation.geolocation_city:
+  - osasco
+
+sellers.seller_city:
+  - osasco
+
+customers.customer_city:
+  - osasco

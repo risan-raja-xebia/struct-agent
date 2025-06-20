@@ -5,235 +5,143 @@ from tqdm import tqdm
 import logging
 from typing import Dict, List, Any, Tuple
 
-from .execution import execute_sql, DatabaseType, detect_database_type
+from sqlalchemy import text, inspect, MetaData
+from sqlalchemy.engine import Engine
+from sqlalchemy.types import String, Text
 
-def _get_table_names(db_connection_string: str, db_type: DatabaseType = None) -> List[str]:
-    """
-    Gets table names from the database.
-
-    Args:
-        db_connection_string (str): Database connection string
-        db_type (DatabaseType, optional): Database type
-
-    Returns:
-        List[str]: List of table names
-    """
-    if db_type is None:
-        db_type = detect_database_type(db_connection_string)
-
-    if db_type == DatabaseType.SQLITE:
-        query = "SELECT name FROM sqlite_master WHERE type='table';"
-    elif db_type == DatabaseType.POSTGRESQL:
-        query = """
-        SELECT table_name
-        FROM information_schema.tables
-        WHERE table_schema = 'public' AND table_type = 'BASE TABLE';
-        """
-    else:
-        raise ValueError(f"Unsupported database type: {db_type}")
-
-    result = execute_sql(db_connection_string, query, fetch="all", db_type=db_type)
-    return [table[0] for table in result]
-
-def _get_table_columns(db_connection_string: str, table_name: str,
-                      db_type: DatabaseType = None) -> List[Tuple]:
-    """
-    Gets column information for a specific table.
-
-    Args:
-        db_connection_string (str): Database connection string
-        table_name (str): Name of the table
-        db_type (DatabaseType, optional): Database type
-
-    Returns:
-        List[Tuple]: List of column information tuples
-    """
-    if db_type is None:
-        db_type = detect_database_type(db_connection_string)
-
-    if db_type == DatabaseType.SQLITE:
-        query = f"PRAGMA table_info('{table_name}')"
-    elif db_type == DatabaseType.POSTGRESQL:
-        query = f"""
-        SELECT
-            column_name,
-            data_type,
-            is_nullable,
-            column_default,
-            ordinal_position,
-            CASE WHEN tc.constraint_type = 'PRIMARY KEY' THEN 1 ELSE 0 END as is_primary_key
-        FROM information_schema.columns c
-        LEFT JOIN information_schema.key_column_usage kcu
-            ON c.table_name = kcu.table_name AND c.column_name = kcu.column_name
-        LEFT JOIN information_schema.table_constraints tc
-            ON kcu.constraint_name = tc.constraint_name AND tc.constraint_type = 'PRIMARY KEY'
-        WHERE c.table_name = '{table_name}' AND c.table_schema = 'public'
-        ORDER BY c.ordinal_position;
-        """
-    else:
-        raise ValueError(f"Unsupported database type: {db_type}")
-
-    return execute_sql(db_connection_string, query, fetch="all", db_type=db_type)
-
-def _get_primary_keys(db_connection_string: str, db_type: DatabaseType = None) -> List[str]:
-    """
-    Gets primary key column names from all tables.
-
-    Args:
-        db_connection_string (str): Database connection string
-        db_type (DatabaseType, optional): Database type
-
-    Returns:
-        List[str]: List of primary key column names
-    """
-    table_names = _get_table_names(db_connection_string, db_type)
-    primary_keys = []
-
-    for table_name in table_names:
-        if db_type == DatabaseType.SQLITE and table_name == "sqlite_sequence":
-            continue
-
-        columns = _get_table_columns(db_connection_string, table_name, db_type)
-
-        for column in columns:
-            if db_type == DatabaseType.SQLITE:
-                # SQLite: column format is (cid, name, type, notnull, dflt_value, pk)
-                if len(column) > 5 and column[5] > 0:  # Check if it's a primary key
-                    column_name = column[1]
-                    if column_name.lower() not in [c.lower() for c in primary_keys]:
-                        primary_keys.append(column_name)
-            elif db_type == DatabaseType.POSTGRESQL:
-                # PostgreSQL: last column is is_primary_key
-                if len(column) > 5 and column[5] == 1:  # is_primary_key = 1
-                    column_name = column[0]  # column_name is first
-                    if column_name.lower() not in [c.lower() for c in primary_keys]:
-                        primary_keys.append(column_name)
-
-    return primary_keys
-
-def _is_text_column(column_info: Tuple, db_type: DatabaseType) -> bool:
-    """
-    Determines if a column contains text data.
-
-    Args:
-        column_info (Tuple): Column information tuple
-        db_type (DatabaseType): Database type
-
-    Returns:
-        bool: True if column contains text data
-    """
-    if db_type == DatabaseType.SQLITE:
-        # SQLite: column format is (cid, name, type, notnull, dflt_value, pk)
-        return "TEXT" in column_info[2].upper()
-    elif db_type == DatabaseType.POSTGRESQL:
-        # PostgreSQL: column format includes data_type at index 1
-        data_type = column_info[1].lower()
-        return data_type in ['text', 'varchar', 'character varying', 'char', 'character']
-    return False
-
-def _get_unique_values(db_connection_string: str, db_type: DatabaseType = None) -> Dict[str, Dict[str, List[str]]]:
+def _get_unique_values(engine: Engine, schema: str = None) -> Dict[str, Dict[str, List[str]]]:
     """
     Retrieves unique text values from the database excluding primary keys.
+    Works with any database supported by SQLAlchemy.
 
     Args:
-        db_connection_string (str): Database connection string
-        db_type (DatabaseType, optional): Database type
+        engine: SQLAlchemy Engine object
+        schema: The schema to use (optional)
 
     Returns:
         Dict[str, Dict[str, List[str]]]: A dictionary containing unique values for each table and column.
     """
-    if db_type is None:
-        db_type = detect_database_type(db_connection_string)
-
-    table_names = _get_table_names(db_connection_string, db_type)
-    primary_keys = _get_primary_keys(db_connection_string, db_type)
-
-    unique_values: Dict[str, Dict[str, List[str]]] = {}
-
+    inspector = inspect(engine)
+    metadata = MetaData(schema=schema) if schema else MetaData()
+    metadata.reflect(bind=engine)
+    # Get all table names in the specified schema
+    table_names = inspector.get_table_names(schema=schema)
+    # Get primary keys across all tables
+    primary_keys = []
     for table_name in table_names:
-        if db_type == DatabaseType.SQLITE and table_name == "sqlite_sequence":
-            continue
-
-        logging.info(f"Processing {table_name}")
-        columns_info = _get_table_columns(db_connection_string, table_name, db_type)
-
-        # Filter text columns that are not primary keys
-        text_columns = []
-        for col_info in columns_info:
-            if db_type == DatabaseType.SQLITE:
-                column_name = col_info[1]
-            else:  # PostgreSQL
-                column_name = col_info[0]
-
-            if (_is_text_column(col_info, db_type) and
-                column_name.lower() not in [c.lower() for c in primary_keys]):
-                text_columns.append(column_name)
-
-        table_values: Dict[str, List[str]] = {}
-
-        for column in text_columns:
-            # Skip columns that likely contain IDs or system data
-            if any(keyword in column.lower() for keyword in ["_id", " id", "url", "email", "web", "time", "phone", "date", "address"]) or column.endswith("Id"):
+        pk_constraint = inspector.get_pk_constraint(table_name, schema=schema)
+        if pk_constraint and 'constrained_columns' in pk_constraint:
+            primary_keys.extend(pk_constraint['constrained_columns'])
+    unique_values: Dict[str, Dict[str, List[str]]] = {}
+    with engine.connect() as connection:
+        for table_name in table_names:
+            # Skip system tables based on database type
+            if table_name.lower() in ['sqlite_sequence', 'information_schema', 'pg_catalog']:
                 continue
-
-            try:
-                # Use proper SQL identifier quoting for each database type
-                if db_type == DatabaseType.SQLITE:
-                    column_ref = f"`{column}`"
-                    table_ref = f"`{table_name}`"
-                else:  # PostgreSQL
-                    column_ref = f'"{column}"'
-                    table_ref = f'"{table_name}"'
-
-                result = execute_sql(db_connection_string, f"""
-                    SELECT SUM(LENGTH(unique_values)), COUNT(unique_values)
-                    FROM (
-                        SELECT DISTINCT {column_ref} AS unique_values
-                        FROM {table_ref}
-                        WHERE {column_ref} IS NOT NULL
-                    ) AS subquery
-                """, fetch="one", timeout=480, db_type=db_type)
-            except Exception as e:
-                logging.warning(f"Error calculating statistics for {table_name}.{column}: {e}")
-                result = (0, 0)
-
-            sum_of_lengths, count_distinct = result
-            if sum_of_lengths is None or count_distinct == 0:
-                continue
-
-            average_length = sum_of_lengths / count_distinct
-            logging.info(f"Column: {column}, sum_of_lengths: {sum_of_lengths}, count_distinct: {count_distinct}, average_length: {average_length}")
-
-            # Determine if we should fetch distinct values
-            should_fetch = (
-                ("name" in column.lower() and sum_of_lengths < 5000000) or
-                (sum_of_lengths < 2000000 and average_length < 25) or
-                count_distinct < 100
-            )
-
-            if should_fetch:
-                logging.info(f"Fetching distinct values for {column}")
+            logging.info(f"Processing {table_name}")
+            # Get columns that are text-based and not primary keys
+            columns_info = inspector.get_columns(table_name, schema=schema)
+            text_columns = []
+            for col in columns_info:
+                col_name = col['name']
+                col_type = col['type']
+                # Check if column is text-based (works across different databases)
+                if (isinstance(col_type, (String, Text)) or
+                    str(col_type).upper() in ['TEXT', 'VARCHAR', 'CHAR', 'NVARCHAR', 'NCHAR', 'CLOB']):
+                    if col_name.lower() not in [pk.lower() for pk in primary_keys]:
+                        text_columns.append(col_name)
+            table_values: Dict[str, List[str]] = {}
+            for column in text_columns:
+                # Skip columns with certain patterns
+                if any(keyword in column.lower() for keyword in
+                      ["_id", " id", "url", "email", "web", "time", "phone", "date", "address"]) or column.endswith("Id"):
+                    continue
                 try:
-                    if db_type == DatabaseType.SQLITE:
-                        column_ref = f"`{column}`"
-                        table_ref = f"`{table_name}`"
-                    else:  # PostgreSQL
-                        column_ref = f'"{column}"'
-                        table_ref = f'"{table_name}"'
+                    # Database-agnostic query for getting sum of lengths and count
+                    # Handle different length functions for different databases
+                    dialect_name = engine.dialect.name
 
-                    values_result = execute_sql(db_connection_string,
-                        f"SELECT DISTINCT {column_ref} FROM {table_ref} WHERE {column_ref} IS NOT NULL",
-                        fetch="all", timeout=480, db_type=db_type)
+                    if dialect_name == 'mssql':
+                        length_func = 'LEN'
+                    elif dialect_name == 'oracle':
+                        length_func = 'LENGTH'
+                    else:
+                        length_func = 'LENGTH'
 
-                    values = [str(value[0]) for value in values_result]
+                    # Use proper identifier quoting for the specific database
+                    if dialect_name == 'mysql':
+                        quote_char = '`'
+                    elif dialect_name == 'mssql':
+                        quote_char = '['
+                    else:
+                        quote_char = '"'
+
+                    # Compose fully qualified table name if schema is provided
+                    if schema:
+                        qualified_table = f'{quote_char}{schema}{quote_char}.{quote_char}{table_name}{quote_char}'
+                    else:
+                        qualified_table = f'{quote_char}{table_name}{quote_char}'
+
+                    if dialect_name == 'mssql':
+                        query = text(f"""
+                            SELECT SUM({length_func}(unique_values)), COUNT(unique_values)
+                            FROM (
+                                SELECT DISTINCT [{column}] AS unique_values
+                                FROM [{table_name}]
+                                WHERE [{column}] IS NOT NULL
+                            ) AS subquery
+                        """)
+                    else:
+                        query = text(f"""
+                            SELECT SUM({length_func}(unique_values)), COUNT(unique_values)
+                            FROM (
+                                SELECT DISTINCT {quote_char}{column}{quote_char} AS unique_values
+                                FROM {qualified_table}
+                                WHERE {quote_char}{column}{quote_char} IS NOT NULL
+                            ) AS subquery
+                        """)
+
+                    result = connection.execute(query).fetchone()
+                    sum_of_lengths, count_distinct = result
                 except Exception as e:
-                    logging.warning(f"Error fetching distinct values for {table_name}.{column}: {e}")
-                    values = []
+                    logging.error(f"Error processing {table_name}.{column}: {e}")
+                    sum_of_lengths, count_distinct = 0, 0
 
-                logging.info(f"Number of different values: {len(values)}")
-                table_values[column] = values
+                if sum_of_lengths is None or count_distinct == 0:
+                    continue
 
-        unique_values[table_name] = table_values
+                average_length = sum_of_lengths / count_distinct
+                logging.info(f"Column: {column}, sum_of_lengths: {sum_of_lengths}, "
+                           f"count_distinct: {count_distinct}, average_length: {average_length}")
+
+                # Decide whether to fetch values based on size
+                if (("name" in column.lower() and sum_of_lengths < 5000000) or
+                    (sum_of_lengths < 2000000 and average_length < 25) or
+                    count_distinct < 100):
+
+                    logging.info(f"Fetching distinct values for {column}")
+                    try:
+                        if dialect_name == 'mssql':
+                            query = text(f"""
+                                SELECT DISTINCT [{column}]
+                                FROM [{table_name}]
+                                WHERE [{column}] IS NOT NULL
+                            """)
+                        else:
+                            query = text(f"""
+                                SELECT DISTINCT {quote_char}{column}{quote_char}
+                                FROM {qualified_table}
+                                WHERE {quote_char}{column}{quote_char} IS NOT NULL
+                            """)
+                        result = connection.execute(query)
+                        values = [str(row[0]) for row in result]
+                        logging.info(f"Number of different values: {len(values)}")
+                        table_values[column] = values
+                    except Exception as e:
+                        logging.error(f"Error fetching values for {table_name}.{column}: {e}")
+                        values = []
+
+            unique_values[table_name] = table_values
 
     return unique_values
 
@@ -242,12 +150,12 @@ def _create_minhash(signature_size: int, string: str, n_gram: int) -> MinHash:
     Creates a MinHash object for a given string.
 
     Args:
-        signature_size (int): The size of the MinHash signature.
-        string (str): The input string to create the MinHash for.
-        n_gram (int): The n-gram size for the MinHash.
+        signature_size: The size of the MinHash signature
+        string: The input string to create the MinHash for
+        n_gram: The n-gram size for the MinHash
 
     Returns:
-        MinHash: The MinHash object for the input string.
+        MinHash: The MinHash object for the input string
     """
     m = MinHash(num_perm=signature_size)
     for d in [string[i:i + n_gram] for i in range(len(string) - n_gram + 1)]:
@@ -259,47 +167,47 @@ def skip_column(column_name: str, column_values: List[str]) -> bool:
     Determines whether to skip processing a column based on its values.
 
     Args:
-        column_name (str): The name of the column.
-        column_values (List[str]): The list of values in the column.
+        column_name: The name of the column
+        column_values: The list of values in the column
 
     Returns:
-        bool: True if the column should be skipped, False otherwise.
+        bool: True if the column should be skipped, False otherwise
     """
     if "name" in column_name.lower():
         return False
     sum_of_lengths = sum(len(value) for value in column_values)
-    average_length = sum_of_lengths / len(column_values) if column_values else 0
+    average_length = sum_of_lengths / len(column_values)
     return (sum_of_lengths > 50000) and (average_length > 20)
 
-def make_lsh(unique_values: Dict[str, Dict[str, List[str]]], signature_size: int, n_gram: int,
-            threshold: float, verbose: bool = True) -> Tuple[MinHashLSH, Dict[str, Tuple[MinHash, str, str, str]]]:
+def make_lsh(unique_values: Dict[str, Dict[str, List[str]]],
+             signature_size: int, n_gram: int, threshold: float,
+             verbose: bool = True) -> Tuple[MinHashLSH, Dict[str, Tuple[MinHash, str, str, str]]]:
     """
     Creates a MinHash LSH from unique values.
 
     Args:
-        unique_values (Dict[str, Dict[str, List[str]]]): The dictionary of unique values.
-        signature_size (int): The size of the MinHash signature.
-        n_gram (int): The n-gram size for the MinHash.
-        threshold (float): The threshold for the MinHash LSH.
-        verbose (bool): Whether to display progress information.
+        unique_values: The dictionary of unique values
+        signature_size: The size of the MinHash signature
+        n_gram: The n-gram size for the MinHash
+        threshold: The threshold for the MinHash LSH
+        verbose: Whether to display progress information
 
     Returns:
-        Tuple[MinHashLSH, Dict[str, Tuple[MinHash, str, str, str]]]: The MinHash LSH object and the dictionary of MinHashes.
+        Tuple[MinHashLSH, Dict]: The MinHash LSH object and the dictionary of MinHashes
     """
     lsh = MinHashLSH(threshold=threshold, num_perm=signature_size)
     minhashes: Dict[str, Tuple[MinHash, str, str, str]] = {}
+
     try:
-        total_unique_values = sum(len(column_values) for table_values in unique_values.values() for column_values in table_values.values())
+        total_unique_values = sum(len(column_values)
+                                 for table_values in unique_values.values()
+                                 for column_values in table_values.values())
         logging.info(f"Total unique values: {total_unique_values}")
 
         progress_bar = tqdm(total=total_unique_values, desc="Creating LSH") if verbose else None
 
         for table_name, table_values in unique_values.items():
             for column_name, column_values in table_values.items():
-                if column_name.lower() == "doctype":
-                    print("="*20)
-                    print("Doctype found")
-                    print("="*20)
                 logging.info(f"Processing {table_name} - {column_name} - {len(column_values)}")
 
                 for id, value in enumerate(column_values):
@@ -313,55 +221,69 @@ def make_lsh(unique_values: Dict[str, Dict[str, List[str]]], signature_size: int
 
         if verbose:
             progress_bar.close()
+
     except Exception as e:
         logging.error(f"Error creating LSH: {e}")
 
     return lsh, minhashes
 
-def make_db_lsh(db_connection_string: str, db_type: DatabaseType = None, **kwargs: Any) -> None:
+def make_db_lsh(engine: Engine, output_directory: str, db_name: str, schema: str = None, **lsh_kwargs: Any) -> None:
     """
     Creates a MinHash LSH for the database and saves the results.
+    Works with any database supported by SQLAlchemy.
 
     Args:
-        db_connection_string (str): Database connection string
-        db_type (DatabaseType, optional): Database type
-        **kwargs (Any): Additional arguments for the LSH creation.
+        engine: SQLAlchemy Engine object
+        output_directory: Directory to save the preprocessed files
+        db_name: Name identifier for the database
+        schema: The schema to use (optional)
+        **lsh_kwargs: Additional arguments for LSH creation
     """
-    if db_type is None:
-        db_type = detect_database_type(db_connection_string)
+    preprocessed_path = Path(output_directory) / "preprocessed"
+    preprocessed_path.mkdir(exist_ok=True, parents=True)
 
-    # For file-based databases like SQLite, use the file path structure
-    if db_type == DatabaseType.SQLITE:
-        db_directory_path = Path(db_connection_string).parent
-        db_id = Path(db_connection_string).stem
-    else:
-        # For PostgreSQL, create a directory structure based on connection details
-        # Extract database name from connection string for directory naming
-        if 'dbname=' in db_connection_string:
-            db_id = db_connection_string.split('dbname=')[1].split()[0].split('&')[0]
-        elif '/' in db_connection_string and db_connection_string.count('/') >= 3:
-            db_id = db_connection_string.split('/')[-1].split('?')[0]
-        else:
-            db_id = "postgresql_db"
-
-        # Create a base directory for PostgreSQL databases
-        db_directory_path = Path(f"./postgresql_dbs/{db_id}")
-
-    preprocessed_path = db_directory_path / "preprocessed"
-    preprocessed_path.mkdir(parents=True, exist_ok=True)
-
-    unique_values = _get_unique_values(db_connection_string, db_type)
+    # Get unique values from database
+    unique_values = _get_unique_values(engine, schema=schema)
     logging.info("Unique values obtained")
 
-    with open(preprocessed_path / f"{db_id}_unique_values.pkl", "wb") as file:
+    # Save unique values
+    with open(preprocessed_path / f"{db_name}_unique_values.pkl", "wb") as file:
         pickle.dump(unique_values, file)
     logging.info("Saved unique values")
 
-    lsh, minhashes = make_lsh(unique_values, **kwargs)
+    # Create LSH
+    lsh, minhashes = make_lsh(unique_values, **lsh_kwargs)
 
-    with open(preprocessed_path / f"{db_id}_lsh.pkl", "wb") as file:
+    # Save LSH and minhashes
+    with open(preprocessed_path / f"{db_name}_lsh.pkl", "wb") as file:
         pickle.dump(lsh, file)
-    with open(preprocessed_path / f"{db_id}_minhashes.pkl", "wb") as file:
+    with open(preprocessed_path / f"{db_name}_minhashes.pkl", "wb") as file:
         pickle.dump(minhashes, file)
 
-    logging.info(f"LSH and MinHashes saved for {db_type.value} database: {db_id}")
+    logging.info(f"LSH preprocessing completed for {db_name}")
+
+
+
+'''
+
+# Example usage
+if __name__ == "__main__":
+    from sqlalchemy import create_engine
+
+    # User creates their own engine
+    # For SQLite
+    sqlite_engine = create_engine('sqlite:///path/to/database.db')
+    make_db_lsh(sqlite_engine, "./output", "my_sqlite_db",
+                signature_size=100, n_gram=3, threshold=0.8)
+
+    # For PostgreSQL
+    pg_engine = create_engine('postgresql://user:password@localhost/dbname')
+    make_db_lsh(pg_engine, "./output", "my_postgres_db",
+                signature_size=100, n_gram=3, threshold=0.8)
+
+    # For MySQL
+    mysql_engine = create_engine('mysql+pymysql://user:password@localhost/dbname')
+    make_db_lsh(mysql_engine, "./output", "my_mysql_db",
+                signature_size=100, n_gram=3, threshold=0.8)
+
+'''
