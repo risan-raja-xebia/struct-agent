@@ -85,7 +85,7 @@ CREATE TABLE
 
 CREATE TABLE
     ecommerce.order_items (
-        order_id TEXT,
+        order_id TEXT PRIMARY KEY,
         order_item_id INTEGER,
         product_id TEXT,
         seller_id TEXT,
@@ -104,7 +104,7 @@ CREATE TABLE
 
 CREATE TABLE
     ecommerce.order_payments (
-        order_id TEXT,
+        order_id TEXT PRIMARY KEY,
         payment_sequential INTEGER,
         payment_type TEXT,
         payment_installments INTEGER,
@@ -117,7 +117,7 @@ CREATE TABLE
 
 CREATE TABLE
     ecommerce.order_reviews (
-        review_id TEXT,
+        review_id TEXT PRIMARY KEY,
         order_id TEXT,
         review_score INTEGER,
         review_comment_title TEXT,
