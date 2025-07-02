@@ -1,4 +1,4 @@
-# Struct-Agent (branch: dev-caleb)
+# Struct-Agent
 
 A full-fledged Structured Query Agent designed to enable natural language to structured query translation, powered by LLMs and schema-aware engines. Built by Xebia.
 
