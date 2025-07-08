@@ -1,0 +1,25 @@
+cube:
+  name: sellers
+  table: ecommerce.sellers
+  dimensions:
+
+    - name: seller_id
+      type: string
+      sql: seller_id
+
+    - name: seller_zip_code_prefix
+      type: string
+      sql: seller_zip_code_prefix
+
+    - name: seller_city
+      type: string
+      sql: seller_city
+
+    - name: seller_state
+      type: string
+      sql: seller_state
+
+  measures:
+
+    - name: count
+      type: count
