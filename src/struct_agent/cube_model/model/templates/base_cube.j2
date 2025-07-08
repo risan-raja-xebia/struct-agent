@@ -1,0 +1,15 @@
+cube:
+  name: {{ cube_name }}
+  table: {{ table_name }}
+  dimensions:
+    {% for dim in dimensions %}
+    - name: {{ dim.name }}
+      type: {{ dim.type }}
+      sql: {{ dim.sql }}
+    {% endfor %}
+  measures:
+    {% for measure in measures %}
+    - name: {{ measure.name }}
+      type: {{ measure.type }}
+      {% if measure.sql %}sql: {{ measure.sql }}{% endif %}
+    {% endfor %}
